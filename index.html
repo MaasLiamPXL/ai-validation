@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Story Generator</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        /* Add your custom styles here */
+        body {
+            padding: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="custom-file mb-3">
+                    <input type="file" class="custom-file-input" id="excelFileInput" accept=".xlsx">
+                    <label class="custom-file-label" for="excelFileInput">Choose Excel file</label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <button type="button" class="btn btn-primary" id="uploadButton">Upload Excel</button>
+            </div>
+        </div>
+
+        <div id="results" class="mt-4"></div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script>
+        document.getElementById('excelFileInput').addEventListener('change', function (e) {
+            var fileName = e.target.files[0].name;
+            var label = document.querySelector('.custom-file-label');
+            label.innerText = fileName;
+        });
+
+        document.getElementById('uploadButton').addEventListener('click', async function () {
+            const fileInput = document.getElementById('excelFileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select an Excel file.');
+                return;
+            }
+
+            try {
+                const results = await parseExcel(file);
+                await processUserStories(results);
+            } catch (error) {
+                console.error('Error:', error.message);
+            }
+        });
+
+        async function parseExcel(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+
+                    const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    // Filter out rows with 'N/A' in the input column
+                    const filteredData = jsonData.filter(row => row.some(cell => cell !== 'N/A'));
+                    // Remove line breaks from each cell in the filtered data
+                    const cleanData = filteredData.map(row =>
+                        row.map(cell => (typeof cell === 'string' ? cell.replace(/[\r\n]+/g, '') : cell))
+                    );
+
+                    resolve(cleanData);
+                };
+
+                reader.onerror = function (error) {
+                    reject(error);
+                };
+
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function generateGherkin(userStory) {
+            try {
+                userStory = "generate a test case using Gherkin syntax for this " + userStory;
+                //userStory = "generate Gegerkin syntax test case for this " + userStory;
+                console.log(userStory);
+                console.log("sent");
+            
+                //const response = await fetch('http://10.128.101.10:4891/v1/completions', {
+                const response = await fetch('http://localhost:4891/v1/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: userStory,
+                        "max_tokens": 2000,
+                        "temperature": 0.28,
+                        "top_p": 0.1,
+                        "top_k": 40,
+                        "prompt_batch_size": 300,
+                        "repeat_penalty": 1.18,
+                        "repeat_last_n": 64
+                    }),
+                });
+                console.log("response");
+                data = (await response.json());
+                console.log('API data:',data);
+                generatedText = data.choices[0].text
+                console.log('text', generatedText);
+
+                if (!response.ok) {
+                    if (response.status === 422) {
+                        const errorData = await response.json();
+                        throw new Error(`Unprocessable Entity: ${JSON.stringify(errorData)}`);
+                    } else {
+                        throw new Error(`Error: ${response.status} - ${response.statusText}`);
+                    }
+                }
+
+                return generatedText || 'N/A';
+            } catch (error) {
+                console.error('Error:', error.message);
+                return 'N/A';
+            }
+        }
+
+
+        async function processUserStories(results) {
+            const resultsContainer = document.getElementById('results');
+            resultsContainer.innerHTML = ''; // Clear previous results
+
+            // Create a table element
+            const table = document.createElement('table');
+            table.classList.add('table', 'table-bordered'); // Add Bootstrap table styles
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>User Story</th>
+                        <th>Generated Gherkin</th>
+                        <th>Feedback</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            `;
+            resultsContainer.appendChild(table);
+
+            const tbody = table.querySelector('tbody');
+
+            for (let i = 0; i < results.length; i++) {
+                const originalUserStory = results[i].map(cell => cell || 'N/A').join(', ');
+
+                // Only consider rows with at least one non-empty cell
+                if (originalUserStory.trim() !== 'N/A') {
+                    const generatedText = await generateGherkin(originalUserStory);
+
+                    // Create a table row
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>User Story ${i + 1}: ${originalUserStory}</td>
+                        <td>${generatedText}</td>
+                        <td>
+                            <label>
+                                <input type="radio" name="feedback-${i}" value="good"> Good
+                            </label>
+                            <label>
+                                <input type="radio" name="feedback-${i}" value="bad"> Bad
+                            </label>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            }
+
+            // Add a button to calculate the percentage
+            const calculateButton = document.createElement('button');
+            calculateButton.textContent = 'Calculate Percentage';
+            calculateButton.addEventListener('click', calculatePercentage);
+            resultsContainer.appendChild(calculateButton);
+
+            console.log("We are done here!!");
+        }
+
+
+        function calculatePercentage() {
+            const feedbackRadioButtons = document.querySelectorAll('input[type="radio"]:checked');
+            const goodFeedbackCount = Array.from(feedbackRadioButtons).filter(button => button.value === 'good').length;
+            const totalFeedbackCount = feedbackRadioButtons.length;
+
+            if (totalFeedbackCount === 0) {
+                alert('No feedback given!');
+            } else {
+                const percentage = (goodFeedbackCount / totalFeedbackCount) * 100;
+                alert(`Percentage of 'Good' feedback: ${percentage.toFixed(2)}%`);
+            }
+        }
+
+    </script>
+</body>
+</html>
