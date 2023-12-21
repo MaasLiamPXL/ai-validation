@@ -92,20 +92,50 @@
 
         async function generateGherkin(userStory) {
             try {
-                userStory = "generate a test case using Gherkin syntax for this " + userStory;
+                prompt = `
+You will be given inputs (User story and acceptance criteria) and your job will be to generate test cases in Gherkin syntax like a testing engineer would do. You will output results in text format.
+
+Input: User Story: 
+
+As a system administrator, I want to automate the daily backup process for our database, so we can ensure data integrity and recover in case of a failure.
+
+
+Output: Feature: Automated Database Backup
+
+Scenario: Configure automated backup settings
+  Given the system administrator is logged in
+  When the administrator configures the backup schedule and storage location
+  Then the backup process should run automatically every day
+  And backups should be stored in the specified directory or server
+  And the system should send a notification email to the administrator after each successful backup
+
+Scenario: View backup history
+  Given the system administrator is logged in
+  When the administrator checks the backup history
+  Then the system should display a list of previous backup dates and status
+
+Input: User Story:  \n\n`;
+
+                prompt += userStory + `\n
+Output`;
+                
+                //userStory = "generate a test case using Gherkin syntax for this " + userStory;
                 //userStory = "generate Gegerkin syntax test case for this " + userStory;
-                console.log(userStory);
+                
+
+
+                console.log(prompt);
                 console.log("sent");
             
-                //const response = await fetch('http://10.128.101.10:4891/v1/completions', {
-                const response = await fetch('http://localhost:4891/v1/completions', {
+                const response = await fetch('http://10.128.101.10:4891/v1/completions', {
+                //const response = await fetch('http://localhost:4891/v1/completions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        prompt: userStory,
-                        "max_tokens": 2000,
+                        prompt: prompt,
+                        "max_tokens": 300,
                         "temperature": 0.28,
                         "top_p": 0.1,
                         "top_k": 40,
@@ -202,9 +232,21 @@
                 alert('No feedback given!');
             } else {
                 const percentage = (goodFeedbackCount / totalFeedbackCount) * 100;
-                alert(`Percentage of 'Good' feedback: ${percentage.toFixed(2)}%`);
+                const subject = 'Feedback Percentage';
+                const body = `Percentage of 'Good' feedback from AI model: ${percentage.toFixed(2)}%`;
+
+                // Add a predefined email address
+                const predefinedEmail = 'liam.maas@refleqt.be';
+
+                // Create a mailto link with predefined email
+                const mailtoLink = `mailto:${predefinedEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+                // Open the user's default email client
+                window.location.href = mailtoLink;
             }
         }
+
+
 
     </script>
 </body>
